@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文本阅读工具</title>
+  <!-- 外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#4F46E5',
+            secondary: '#10B981',
+            neutral: {
+              100: '#F3F4F6',
+              200: '#E5E7EB',
+              300: '#D1D5DB',
+              800: '#1F2937',
+              900: '#111827',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            serif: ['Georgia', 'Cambria', 'serif'],
+            mono: ['Courier New', 'monospace'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <!-- 自定义样式 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .book-shadow {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06),
+                    5px 5px 0 rgba(0, 0, 0, 0.05);
+      }
+      .book-hover {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+      .book-hover:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05),
+                    5px 8px 0 rgba(0, 0, 0, 0.05);
+      }
+    }
+  </style>
+  
+  <style>
+    body {
+      transition: background-color 0.3s ease;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #bbb;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #999;
+    }
+    
+    #txt-container, #pdf-container {
+      transition: all 0.3s ease;
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .highlight {
+      background-color: rgba(255, 251, 0, 0.3);
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    
+    .underline {
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-decoration-color: #4F46E5;
+    }
+    
+    .textLayer {
+      pointer-events: auto !important;
+    }
+    
+    /* 书籍封面样式 */
+    .book-cover {
+      position: relative;
+      overflow: hidden;
+      border-radius: 4px;
+      aspect-ratio: 2/3;
+    }
+    
+    .book-cover-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      background-color: #e2e8f0;
+      color: #64748b;
+    }
+    
+    .book-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background-color: rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .book-progress-bar {
+      height: 100%;
+      background-color: #4F46E5;
+    }
+    
+    /* 返回按钮动画 */
+    .back-button {
+      transition: all 0.2s ease;
+    }
+    
+    .back-button:active {
+      transform: scale(0.9);
+    }
+  </style>
+</head>
+
+<body class="bg-neutral-100 text-neutral-800 dark:bg-neutral-900 dark:text-neutral-100 min-h-screen flex flex-col">
+  <!-- 顶部导航 -->
+  <header class="bg-white dark:bg-neutral-800 shadow-sm sticky top-0 z-50 transition-all duration-300">
+    <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+      <!-- 标题和返回按钮 -->
+      <div class="flex items-center space-x-2">
+        <button id="back-button" class="back-button p-2 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors hidden">
+          <i class="fa fa-arrow-left"></i>
+        </button>
+        <i class="fa fa-book text-primary text-2xl"></i>
+        <h1 class="text-xl font-bold text-primary">文本阅读工具</h1>
+      </div>
+      
+      <div class="flex items-center space-x-4">
+        <label for="file-upload" class="cursor-pointer hover:text-primary transition-colors">
+          <i class="fa fa-upload text-lg"></i>
+          <span class="ml-1 hidden sm:inline">导入书籍</span>
+          <input id="file-upload" type="file" accept=".txt,.pdf" class="hidden">
+        </label>
+        
+        <div class="relative hidden md:block">
+          <input type="text" id="search-input" placeholder="搜索文本..." 
+                 class="bg-neutral-100 dark:bg-neutral-700 rounded-full px-4 py-1.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 w-48 lg:w-64">
+          <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400"></i>
+        </div>
+        
+        <button id="theme-toggle" class="p-2 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+          <i class="fa fa-moon-o dark:hidden"></i>
+          <i class="fa fa-sun-o hidden dark:inline"></i>
+        </button>
+        
+        <button id="menu-toggle" class="p-2 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors md:hidden">
+          <i class="fa fa-bars"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="flex-1 overflow-hidden">
+    <!-- 书架首页 -->
+    <div id="bookshelf" class="h-full overflow-y-auto p-4 md:p-8">
+      <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold">我的书架</h2>
+          <label for="bookshelf-upload" class="cursor-pointer bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+            <i class="fa fa-plus mr-2"></i> 添加书籍
+          </label>
+          <input id="bookshelf-upload" type="file" accept=".txt,.pdf" class="hidden">
+        </div>
+        
+        <!-- 最近阅读 -->
+        <div class="mb-8">
+          <h3 class="text-lg font-semibold mb-4 flex items-center">
+            <i class="fa fa-history text-primary mr-2"></i> 最近阅读
+          </h3>
+          <div id="recent-books-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <!-- 最近阅读的书籍将在这里显示 -->
+            <div class="col-span-full text-center py-10 text-neutral-500 dark:text-neutral-400">
+              <i class="fa fa-book-open text-5xl mb-3 opacity-30"></i>
+              <p>暂无阅读记录</p>
+              <p class="text-sm mt-2">点击"添加书籍"开始阅读</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 所有书籍 -->
+        <div>
+          <h3 class="text-lg font-semibold mb-4 flex items-center">
+            <i class="fa fa-th text-primary mr-2"></i> 我的藏书
+          </h3>
+          <div id="all-books-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <!-- 所有书籍将在这里显示 -->
+            <!-- 会与最近阅读区域共享数据 -->
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 阅读界面容器 -->
+    <div id="reader-interface" class="hidden flex h-full">
+      <!-- 侧边栏 -->
+      <aside id="sidebar" class="w-64 bg-white dark:bg-neutral-800 shadow-md transform -translate-x-full md:translate-x-0 fixed md:static h-full z-40 transition-transform duration-300 overflow-y-auto">
+        <div class="p-4">
+          <h2 class="font-semibold text-lg mb-4">文档管理</h2>
+          
+          <div class="mb-6">
+            <h3 class="text-sm text-neutral-500 dark:text-neutral-400 mb-2">最近阅读</h3>
+            <ul id="recent-files" class="space-y-2">
+              <li class="text-sm text-neutral-500 dark:text-neutral-400 italic text-center py-4">
+                暂无阅读记录
+              </li>
+            </ul>
+          </div>
+          
+          <div>
+            <h3 class="text-sm text-neutral-500 dark:text-neutral-400 mb-2">文档目录</h3>
+            <ul id="document-toc" class="space-y-1 text-sm">
+              <li class="text-neutral-500 dark:text-neutral-400 italic text-center py-4">
+                请打开一个文档
+              </li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 主阅读区 -->
+      <div class="flex-1 overflow-y-auto p-4 md:p-8 lg:p-16">
+        <div id="reader-container" class="max-w-4xl mx-auto fade-in">
+          <div class="mb-8 flex justify-between items-center">
+            <h2 id="document-title" class="text-2xl font-bold"></h2>
+            <div class="flex items-center space-x-2">
+              <span id="reading-progress" class="text-sm text-neutral-500 dark:text-neutral-400">0%</span>
+              <div class="w-32 bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                <div id="progress-bar" class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 加载提示 -->
+          <div id="loading-indicator" class="hidden bg-white dark:bg-neutral-800 p-6 md:p-10 rounded-xl shadow-sm min-h-[500px] flex items-center justify-center">
+            <div class="text-center">
+              <i class="fa fa-spinner fa-spin text-4xl text-primary mb-4"></i>
+              <p>正在加载文档...</p>
+            </div>
+          </div>
+          
+          <!-- 错误提示 -->
+          <div id="error-message" class="hidden bg-white dark:bg-neutral-800 p-6 md:p-10 rounded-xl shadow-sm min-h-[500px] flex flex-col items-center justify-center">
+            <i class="fa fa-exclamation-triangle text-4xl text-yellow-500 mb-4"></i>
+            <p id="error-text" class="mb-4">加载文档时出错</p>
+            <button id="retry-load" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors">
+              重试
+            </button>
+          </div>
+          
+          <!-- TXT内容区 -->
+          <div id="txt-container" class="hidden bg-white dark:bg-neutral-800 p-6 md:p-10 rounded-xl shadow-sm min-h-[500px] font-sans text-base overflow-auto">
+            <!-- TXT内容将在这里显示 -->
+          </div>
+          
+          <!-- PDF内容区 -->
+          <div id="pdf-container" class="hidden bg-white dark:bg-neutral-800 p-6 md:p-10 rounded-xl shadow-sm min-h-[500px]">
+            <div id="pdf-viewer" class="w-full"></div>
+            <div class="flex justify-center mt-4 space-x-2">
+              <button id="prev-page" class="px-3 py-1 bg-neutral-200 dark:bg-neutral-700 rounded hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors">
+                <i class="fa fa-chevron-left"></i> 上一页
+              </button>
+              <span id="page-info" class="text-sm text-neutral-500 dark:text-neutral-400">第1页 / 共0页</span>
+              <button id="next-page" class="px-3 py-1 bg-neutral-200 dark:bg-neutral-700 rounded hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors">
+                下一页 <i class="fa fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="mt-8 flex justify-between items-center">
+            <button id="prev-chapter" class="flex items-center text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <i class="fa fa-chevron-left mr-2"></i>
+              上一章
+            </button>
+            <button id="next-chapter" class="flex items-center text-primary hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              下一章
+              <i class="fa fa-chevron-right ml-2"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 右侧工具栏 -->
+      <aside id="toolbar" class="w-64 bg-white dark:bg-neutral-800 shadow-md transform translate-x-full lg:translate-x-0 fixed lg:static h-full z-40 transition-transform duration-300 overflow-y-auto">
+        <div class="p-4">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="font-semibold text-lg">阅读设置</h2>
+            <button id="close-toolbar" class="p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 lg:hidden">
+              <i class="fa fa-times"></i>
+            </button>
+          </div>
+          
+          <!-- 编码选择（仅TXT） -->
+          <div id="encoding-selector" class="mb-6 hidden">
+            <h3 class="text-sm font-medium mb-3">文本编码</h3>
+            <select id="txt-encoding" class="w-full bg-neutral-100 dark:bg-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+              <option value="utf-8">UTF-8（默认）</option>
+              <option value="gbk">GBK（简体中文）</option>
+              <option value="gb2312">GB2312（简体中文）</option>
+              <option value="big5">Big5（繁体中文）</option>
+            </select>
+          </div>
+          
+          <!-- 字体设置 -->
+          <div class="mb-6">
+            <h3 class="text-sm font-medium mb-3">字体设置</h3>
+            
+            <div class="mb-4">
+              <label class="block text-sm text-neutral-500 dark:text-neutral-400 mb-1">字体</label>
+              <select id="font-family" class="w-full bg-neutral-100 dark:bg-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <option value="sans">无衬线</option>
+                <option value="serif">衬线</option>
+                <option value="mono">等宽</option>
+              </select>
+            </div>
+            
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-sm text-neutral-500 dark:text-neutral-400">字体大小</label>
+                <span id="font-size-value" class="text-sm">16px</span>
+              </div>
+              <input type="range" id="font-size" min="12" max="24" value="16" 
+                     class="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-primary">
+            </div>
+          </div>
+          
+          <!-- 间距设置 -->
+          <div class="mb-6">
+            <h3 class="text-sm font-medium mb-3">间距设置</h3>
+            
+            <div class="mb-4">
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-sm text-neutral-500 dark:text-neutral-400">行间距</label>
+                <span id="line-height-value" class="text-sm">1.8</span>
+              </div>
+              <input type="range" id="line-height" min="1.2" max="2.5" step="0.1" value="1.8" 
+                     class="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-primary">
+            </div>
+            
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-sm text-neutral-500 dark:text-neutral-400">段落间距</label>
+                <span id="paragraph-spacing-value" class="text-sm">16px</span>
+              </div>
+              <input type="range" id="paragraph-spacing" min="0" max="40" value="16" 
+                     class="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-primary">
+            </div>
+          </div>
+          
+          <!-- 背景设置 -->
+          <div class="mb-6">
+            <h3 class="text-sm font-medium mb-3">背景设置</h3>
+            <div class="grid grid-cols-5 gap-2">
+              <button class="bg-white dark:bg-neutral-800 w-8 h-8 rounded-full border-2 border-primary hover:border-primary focus:border-primary transition-all" data-bg="white"></button>
+              <button class="bg-neutral-200 dark:bg-neutral-700 w-8 h-8 rounded-full border-2 border-transparent hover:border-primary focus:border-primary transition-all" data-bg="#E5E7EB"></button>
+              <button class="bg-[#FFF8E1] dark:bg-[#4E342E] w-8 h-8 rounded-full border-2 border-transparent hover:border-primary focus:border-primary transition-all" data-bg="#FFF8E1"></button>
+              <button class="bg-[#E8F5E9] dark:bg-[#1B5E20] w-8 h-8 rounded-full border-2 border-transparent hover:border-primary focus:border-primary transition-all" data-bg="#E8F5E9"></button>
+              <button class="bg-neutral-900 dark:bg-white w-8 h-8 rounded-full border-2 border-transparent hover:border-primary focus:border-primary transition-all" data-bg="neutral-900"></button>
+            </div>
+          </div>
+          
+          <!-- 辅助功能 -->
+          <div class="mb-6">
+            <h3 class="text-sm font-medium mb-3">辅助功能</h3>
+            <div class="space-y-3">
+              <button id="read-aloud" class="w-full flex items-center justify-center space-x-2 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg py-2 transition-colors">
+                <i class="fa fa-volume-up"></i>
+                <span>文本朗读</span>
+              </button>
+              
+              <div class="flex items-center justify-between">
+                <label class="text-sm flex items-center space-x-2 cursor-pointer">
+                  <i class="fa fa-adjust"></i>
+                  <span>专注模式</span>
+                </label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="focus-mode" class="sr-only peer">
+                  <div class="w-9 h-5 bg-neutral-300 dark:bg-neutral-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 标注管理 -->
+          <div>
+            <h3 class="text-sm font-medium mb-3">我的标注</h3>
+            <div id="annotations-list" class="space-y-2 max-h-40 overflow-y-auto">
+              <div class="text-sm text-neutral-500 dark:text-neutral-400 italic text-center py-4">
+                暂无标注
+              </div>
+            </div>
+            <button id="clear-annotations" class="w-full mt-3 text-sm text-red-500 hover:text-red-600 transition-colors">
+              清除所有标注
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- 移动端底部工具栏 -->
+  <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-neutral-800 shadow-lg z-30 py-2 px-4">
+    <div class="flex justify-around items-center">
+      <button id="mobile-sidebar-toggle" class="flex flex-col items-center text-sm py-1">
+        <i class="fa fa-list-ul text-lg mb-1"></i>
+        <span>目录</span>
+      </button>
+      <button id="mobile-search-toggle" class="flex flex-col items-center text-sm py-1">
+        <i class="fa fa-search text-lg mb-1"></i>
+        <span>搜索</span>
+      </button>
+      <button id="mobile-annotate-toggle" class="flex flex-col items-center text-sm py-1">
+        <i class="fa fa-highlighter text-lg mb-1"></i>
+        <span>标注</span>
+      </button>
+      <button id="mobile-toolbar-toggle" class="flex flex-col items-center text-sm py-1">
+        <i class="fa fa-cog text-lg mb-1"></i>
+        <span>设置</span>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 标注菜单 -->
+  <div id="annotation-menu" class="hidden absolute z-50 bg-white dark:bg-neutral-800 shadow-lg rounded-lg p-1 flex space-x-1">
+    <button id="highlight-btn" class="p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700" title="高亮">
+      <i class="fa fa-marker text-yellow-500"></i>
+    </button>
+    <button id="underline-btn" class="p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700" title="下划线">
+      <i class="fa fa-underline text-primary"></i>
+    </button>
+    <button id="note-btn" class="p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700" title="添加笔记">
+      <i class="fa fa-sticky-note text-green-500"></i>
+    </button>
+  </div>
+  
+  <!-- 搜索面板 (移动端) -->
+  <div id="search-panel" class="hidden fixed inset-0 bg-black/50 z-50 lg:hidden">
+    <div class="bg-white dark:bg-neutral-800 h-32 p-4">
+      <div class="flex items-center mb-4">
+        <button id="close-search" class="p-2 mr-2">
+          <i class="fa fa-arrow-left"></i>
+        </button>
+        <h3 class="font-medium">搜索文本</h3>
+      </div>
+      <div class="relative">
+        <input type="text" id="mobile-search-input" placeholder="输入搜索内容..." 
+               class="w-full bg-neutral-100 dark:bg-neutral-700 rounded-full px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-primary/50">
+        <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400"></i>
+      </div>
+      <div id="mobile-search-results" class="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+        搜索结果将显示在这里
+      </div>
+    </div>
+  </div>
+  
+  <!-- 标注面板 (移动端) -->
+  <div id="annotate-panel" class="hidden fixed inset-0 bg-black/50 z-50 lg:hidden">
+    <div class="bg-white dark:bg-neutral-800 h-40 p-4">
+      <div class="flex items-center mb-4">
+        <button id="close-annotate" class="p-2 mr-2">
+          <i class="fa fa-arrow-left"></i>
+        </button>
+        <h3 class="font-medium">文本标注</h3>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <button id="mobile-highlight-btn" class="flex flex-col items-center justify-center p-4 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700">
+          <i class="fa fa-marker text-2xl text-yellow-500 mb-2"></i>
+          <span>高亮</span>
+        </button>
+        <button id="mobile-underline-btn" class="flex flex-col items-center justify-center p-4 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700">
+          <i class="fa fa-underline text-2xl text-primary mb-2"></i>
+          <span>下划线</span>
+        </button>
+        <button id="mobile-note-btn" class="flex flex-col items-center justify-center p-4 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700">
+          <i class="fa fa-sticky-note text-2xl text-green-500 mb-2"></i>
+          <span>笔记</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF.js库 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/web/text_layer_builder.min.js"></script>
+
+  <script>
+    // 配置PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    
+    // 应用状态管理
+    const appState = {
+      view: 'bookshelf', // 'bookshelf' 或 'reader'
+      currentFile: null,
+      fileType: 'txt',
+      currentContent: '',
+      chapters: [],
+      currentChapterIndex: 0,
+      pdfDoc: null,
+      currentPage: 1,
+      totalPages: 0,
+      annotations: [],
+      isReadingAloud: false,
+      speechSynthesis: window.speechSynthesis || null,
+      speechUtterance: null,
+      books: [], // 存储所有书籍信息
+      readingProgress: {} // 存储每本书的阅读进度
+    };
+    
+    // DOM元素引用
+    const elements = {
+      // 视图容器
+      bookshelf: document.getElementById('bookshelf'),
+      readerInterface: document.getElementById('reader-interface'),
+      backButton: document.getElementById('back-button'),
+      
+      // 书架元素
+      recentBooksContainer: document.getElementById('recent-books-container'),
+      allBooksContainer: document.getElementById('all-books-container'),
+      bookshelfUpload: document.getElementById('bookshelf-upload'),
+      
+      // 状态容器
+      loadingIndicator: document.getElementById('loading-indicator'),
+      errorMessage: document.getElementById('error-message'),
+      errorText: document.getElementById('error-text'),
+      retryLoad: document.getElementById('retry-load'),
+      
+      // 内容容器
+      txtContainer: document.getElementById('txt-container'),
+      pdfContainer: document.getElementById('pdf-container'),
+      pdfViewer: document.getElementById('pdf-viewer'),
+      
+      // 侧边栏
+      sidebar: document.getElementById('sidebar'),
+      menuToggle: document.getElementById('menu-toggle'),
+      recentFiles: document.getElementById('recent-files'),
+      documentToc: document.getElementById('document-toc'),
+      
+      // 工具栏
+      toolbar: document.getElementById('toolbar'),
+      closeToolbar: document.getElementById('close-toolbar'),
+      encodingSelector: document.getElementById('encoding-selector'),
+      txtEncoding: document.getElementById('txt-encoding'),
+      
+      // 移动端控制
+      mobileSidebarToggle: document.getElementById('mobile-sidebar-toggle'),
+      mobileSearchToggle: document.getElementById('mobile-search-toggle'),
+      mobileToolbarToggle: document.getElementById('mobile-toolbar-toggle'),
+      mobileAnnotateToggle: document.getElementById('mobile-annotate-toggle'),
+      searchPanel: document.getElementById('search-panel'),
+      closeSearch: document.getElementById('close-search'),
+      annotatePanel: document.getElementById('annotate-panel'),
+      closeAnnotate: document.getElementById('close-annotate'),
+      
+      // 阅读控制
+      fileUpload: document.getElementById('file-upload'),
+      documentTitle: document.getElementById('document-title'),
+      prevPage: document.getElementById('prev-page'),
+      nextPage: document.getElementById('next-page'),
+      pageInfo: document.getElementById('page-info'),
+      prevChapter: document.getElementById('prev-chapter'),
+      nextChapter: document.getElementById('next-chapter'),
+      readingProgress: document.getElementById('reading-progress'),
+      progressBar: document.getElementById('progress-bar'),
+      
+      // 搜索功能
+      searchInput: document.getElementById('search-input'),
+      mobileSearchInput: document.getElementById('mobile-search-input'),
+      mobileSearchResults: document.getElementById('mobile-search-results'),
+      
+      // 主题和显示设置
+      themeToggle: document.getElementById('theme-toggle'),
+      fontFamily: document.getElementById('font-family'),
+      fontSize: document.getElementById('font-size'),
+      fontSizeValue: document.getElementById('font-size-value'),
+      lineHeight: document.getElementById('line-height'),
+      lineHeightValue: document.getElementById('line-height-value'),
+      paragraphSpacing: document.getElementById('paragraph-spacing'),
+      paragraphSpacingValue: document.getElementById('paragraph-spacing-value'),
+      backgroundOptions: document.querySelectorAll('[data-bg]'),
+      focusMode: document.getElementById('focus-mode'),
+      
+      // 辅助功能
+      readAloud: document.getElementById('read-aloud'),
+      
+      // 标注功能
+      annotationMenu: document.getElementById('annotation-menu'),
+      highlightBtn: document.getElementById('highlight-btn'),
+      underlineBtn: document.getElementById('underline-btn'),
+      noteBtn: document.getElementById('note-btn'),
+      mobileHighlightBtn: document.getElementById('mobile-highlight-btn'),
+      mobileUnderlineBtn: document.getElementById('mobile-underline-btn'),
+      mobileNoteBtn: document.getElementById('mobile-note-btn'),
+      annotationsList: document.getElementById('annotations-list'),
+      clearAnnotations: document.getElementById('clear-annotations')
+    };
+    
+    // PDF配置
+    const pdfConfig = {
+      scale: 1.2,
+      textLayerMode: 1
+    };
+    
+    // 初始化
+    function init() {
+      loadSettings();
+      loadBooks();
+      bindEvents();
+      setupBackNavigation();
+    }
+    
+    // 绑定事件
+    function bindEvents() {
+      // 视图切换
+      elements.backButton.addEventListener('click', switchToBookshelf);
+      
+      // 文件上传
+      elements.fileUpload.addEventListener('change', handleFileUpload);
+      elements.bookshelfUpload.addEventListener('change', handleFileUpload);
+      elements.retryLoad.addEventListener('click', () => {
+        if (appState.currentFile) handleFileUpload({ target: { files: [appState.currentFile] } });
+      });
+      
+      // 编码切换（解决TXT乱码）
+      elements.txtEncoding.addEventListener('change', () => {
+        if (appState.fileType === 'txt' && appState.currentFile) {
+          readTxtFileWithEncoding(appState.currentFile, elements.txtEncoding.value);
+        }
+      });
+      
+      // 侧边栏控制
+      elements.menuToggle.addEventListener('click', () => {
+        elements.sidebar.classList.toggle('-translate-x-full');
+      });
+      
+      elements.mobileSidebarToggle.addEventListener('click', () => {
+        elements.sidebar.classList.toggle('-translate-x-full');
+        elements.toolbar.classList.add('translate-x-full');
+        elements.searchPanel.classList.add('hidden');
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      // 工具栏控制
+      elements.mobileToolbarToggle.addEventListener('click', () => {
+        elements.toolbar.classList.toggle('translate-x-full');
+        elements.sidebar.classList.add('-translate-x-full');
+        elements.searchPanel.classList.add('hidden');
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      elements.closeToolbar.addEventListener('click', () => {
+        elements.toolbar.classList.add('translate-x-full');
+      });
+      
+      // 搜索面板控制
+      elements.mobileSearchToggle.addEventListener('click', () => {
+        elements.searchPanel.classList.toggle('hidden');
+        elements.sidebar.classList.add('-translate-x-full');
+        elements.toolbar.classList.add('translate-x-full');
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      elements.closeSearch.addEventListener('click', () => {
+        elements.searchPanel.classList.add('hidden');
+      });
+      
+      // 标注面板控制
+      elements.mobileAnnotateToggle.addEventListener('click', () => {
+        elements.annotatePanel.classList.toggle('hidden');
+        elements.sidebar.classList.add('-translate-x-full');
+        elements.toolbar.classList.add('translate-x-full');
+        elements.searchPanel.classList.add('hidden');
+      });
+      
+      elements.closeAnnotate.addEventListener('click', () => {
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      // 主题切换
+      elements.themeToggle.addEventListener('click', toggleTheme);
+      
+      // 字体设置
+      elements.fontFamily.addEventListener('change', updateFontFamily);
+      elements.fontSize.addEventListener('input', updateFontSize);
+      elements.lineHeight.addEventListener('input', updateLineHeight);
+      elements.paragraphSpacing.addEventListener('input', updateParagraphSpacing);
+      
+      // 背景设置
+      elements.backgroundOptions.forEach(option => {
+        option.addEventListener('click', () => {
+          setBackground(option.dataset.bg);
+          elements.backgroundOptions.forEach(opt => opt.classList.remove('border-primary'));
+          option.classList.add('border-primary');
+        });
+      });
+      
+      // 专注模式
+      elements.focusMode.addEventListener('change', toggleFocusMode);
+      
+      // 朗读功能
+      elements.readAloud.addEventListener('click', toggleReadAloud);
+      
+      // 导航控制
+      elements.prevChapter.addEventListener('click', goToPrevChapter);
+      elements.nextChapter.addEventListener('click', goToNextChapter);
+      elements.prevPage.addEventListener('click', goToPrevPage);
+      elements.nextPage.addEventListener('click', goToNextPage);
+      
+      // 搜索功能
+      elements.searchInput.addEventListener('input', handleSearch);
+      elements.mobileSearchInput.addEventListener('input', handleSearch);
+      
+      // 标注功能
+      document.addEventListener('mouseup', showAnnotationMenu);
+      document.addEventListener('touchend', showAnnotationMenu);
+      document.addEventListener('click', hideAnnotationMenu);
+      
+      elements.highlightBtn.addEventListener('click', () => {
+        addAnnotation('highlight');
+        hideAnnotationMenu();
+      });
+      
+      elements.underlineBtn.addEventListener('click', () => {
+        addAnnotation('underline');
+        hideAnnotationMenu();
+      });
+      
+      elements.noteBtn.addEventListener('click', () => {
+        addAnnotation('note');
+        hideAnnotationMenu();
+      });
+      
+      elements.mobileHighlightBtn.addEventListener('click', () => {
+        addAnnotation('highlight');
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      elements.mobileUnderlineBtn.addEventListener('click', () => {
+        addAnnotation('underline');
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      elements.mobileNoteBtn.addEventListener('click', () => {
+        addAnnotation('note');
+        elements.annotatePanel.classList.add('hidden');
+      });
+      
+      elements.clearAnnotations.addEventListener('click', clearAllAnnotations);
+      
+      // 监听滚动事件以更新阅读进度
+      elements.txtContainer.addEventListener('scroll', updateReadingProgress);
+    }
+    
+    // 设置返回导航
+    function setupBackNavigation() {
+      // 监听浏览器返回按钮
+      window.addEventListener('popstate', () => {
+        if (appState.view === 'reader') {
+          saveCurrentReadingProgress();
+          switchToBookshelf();
+        } else {
+          // 如果在书架页，返回按钮将正常导航
+          history.pushState(null, null, window.location.href);
+        }
+      });
+      
+      // 初始状态压入历史记录
+      history.pushState(null, null, window.location.href);
+    }
+    
+    // 切换到书架视图
+    function switchToBookshelf() {
+      if (appState.view === 'reader') {
+        saveCurrentReadingProgress();
+      }
+      
+      appState.view = 'bookshelf';
+      elements.bookshelf.classList.remove('hidden');
+      elements.readerInterface.classList.add('hidden');
+      elements.backButton.classList.add('hidden');
+      history.pushState(null, null, window.location.href);
+    }
+    
+    // 切换到阅读视图
+    function switchToReader() {
+      appState.view = 'reader';
+      elements.bookshelf.classList.add('hidden');
+      elements.readerInterface.classList.remove('hidden');
+      elements.backButton.classList.remove('hidden');
+      history.pushState(null, null, window.location.href);
+    }
+    
+    // 处理文件上传
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // 检查文件是否已存在
+      const existingBookIndex = appState.books.findIndex(book => book.name === file.name);
+      
+      if (existingBookIndex >= 0) {
+        // 更新现有书籍的信息
+        appState.books[existingBookIndex].lastAccessed = new Date().toISOString();
+      } else {
+        // 创建新书籍记录
+        const newBook = {
+          id: generateId(),
+          name: file.name,
+          type: file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'txt',
+          size: file.size,
+          added: new Date().toISOString(),
+          lastAccessed: new Date().toISOString(),
+          encoding: 'utf-8' // 默认编码
+        };
+        
+        // 为书籍生成封面颜色
+        newBook.coverColor = getRandomCoverColor();
+        
+        appState.books.push(newBook);
+      }
+      
+      // 保存书籍列表
+      saveBooks();
+      renderBookshelf();
+      
+      // 加载并打开书籍
+      openBook(file);
+    }
+    
+    // 打开书籍
+    function openBook(file) {
+      // 重置状态
+      appState.currentFile = file;
+      switchToReader();
+      
+      elements.loadingIndicator.classList.remove('hidden');
+      elements.txtContainer.classList.add('hidden');
+      elements.pdfContainer.classList.add('hidden');
+      elements.errorMessage.classList.add('hidden');
+      elements.documentTitle.textContent = file.name;
+      
+      // 判断文件类型
+      if (file.name.toLowerCase().endsWith('.pdf')) {
+        appState.fileType = 'pdf';
+        elements.encodingSelector.classList.add('hidden');
+        loadPdfFile(file);
+      } else {
+        appState.fileType = 'txt';
+        elements.encodingSelector.classList.remove('hidden');
+        
+        // 查找书籍编码设置
+        const book = appState.books.find(b => b.name === file.name);
+        const encoding = book ? book.encoding : 'utf-8';
+        elements.txtEncoding.value = encoding;
+        
+        readTxtFileWithEncoding(file, encoding);
+      }
+    }
+    
+    // 从书架打开书籍
+    function openBookFromShelf(bookId) {
+      const book = appState.books.find(b => b.id === bookId);
+      if (!book) return;
+      
+      // 模拟文件对象（实际应用中需要重新选择文件）
+      // 这里使用提示引导用户重新选择文件
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = book.type === 'pdf' ? '.pdf' : '.txt';
+      input.onchange = function(e) {
+        if (e.target.files[0]) {
+          // 更新最后访问时间
+          book.lastAccessed = new Date().toISOString();
+          saveBooks();
+          renderBookshelf();
+          
+          openBook(e.target.files[0]);
+        }
+      };
+      
+      input.click();
+    }
+    
+    // 读取TXT文件（支持多种编码）
+    function readTxtFileWithEncoding(file, encoding) {
+      const reader = new FileReader();
+      
+      // 更新书籍编码设置
+      const bookIndex = appState.books.findIndex(b => b.name === file.name);
+      if (bookIndex >= 0) {
+        appState.books[bookIndex].encoding = encoding;
+        saveBooks();
+      }
+      
+      // 使用ArrayBuffer读取以支持多种编码
+      reader.onload = function(event) {
+        try {
+          const arrayBuffer = event.target.result;
+          
+          // 使用TextDecoder处理不同编码
+          const decoder = new TextDecoder(encoding);
+          appState.currentContent = decoder.decode(arrayBuffer);
+          
+          splitIntoChapters(appState.currentContent);
+          
+          // 恢复阅读进度
+          restoreReadingProgress(file.name);
+          
+          renderCurrentChapter();
+          updateRecentFiles(file);
+          saveSettings();
+          
+          elements.loadingIndicator.classList.add('hidden');
+          elements.txtContainer.classList.remove('hidden');
+        } catch (error) {
+          showError(`文本解码失败，请尝试其他编码格式。错误: ${error.message}`);
+        }
+      };
+      
+      reader.onerror = function() {
+        showError(`文件读取失败: ${reader.error.message}`);
+      };
+      
+      reader.readAsArrayBuffer(file);
+    }
+    
+    // 加载PDF文件
+    function loadPdfFile(file) {
+      const fileReader = new FileReader();
+      
+      fileReader.onload = function() {
+        try {
+          const typedArray = new Uint8Array(this.result);
+          
+          // 加载PDF文档
+          pdfjsLib.getDocument({
+            data: typedArray,
+            cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/cmaps/',
+            cMapPacked: true
+          }).promise.then(function(pdfDoc) {
+            appState.pdfDoc = pdfDoc;
+            appState.totalPages = pdfDoc.numPages;
+            
+            // 恢复阅读进度
+            restoreReadingProgress(file.name);
+            
+            renderPdfPage(appState.currentPage);
+            updatePageNavigation();
+            generatePdfToc();
+            updateRecentFiles(file);
+            saveSettings();
+            
+            elements.loadingIndicator.classList.add('hidden');
+            elements.pdfContainer.classList.remove('hidden');
+          }).catch(function(error) {
+            showError(`PDF加载失败: ${error.message}`);
+          });
+        } catch (error) {
+          showError(`PDF处理失败: ${error.message}`);
+        }
+      };
+      
+      fileReader.onerror = function() {
+        showError(`文件读取失败: ${fileReader.error.message}`);
+      };
+      
+      fileReader.readAsArrayBuffer(file);
+    }
+    
+    // 显示错误信息
+    function showError(message) {
+      elements.loadingIndicator.classList.add('hidden');
+      elements.errorText.textContent = message;
+      elements.errorMessage.classList.remove('hidden');
+    }
+    
+    // TXT章节分割
+    function splitIntoChapters(content) {
+      const chapterRegex = /第[零一二三四五六七八九十百千万]+章/;
+      const paragraphs = content.split('\n\n').filter(p => p.trim() !== '');
+      const chapters = [];
+      let currentChapter = [];
+      
+      paragraphs.forEach(paragraph => {
+        if (chapterRegex.test(paragraph) && currentChapter.length > 0) {
+          chapters.push(currentChapter.join('\n\n'));
+          currentChapter = [paragraph];
+        } else {
+          currentChapter.push(paragraph);
+        }
+      });
+      
+      if (currentChapter.length > 0) {
+        chapters.push(currentChapter.join('\n\n'));
+      }
+      
+      appState.chapters = chapters.length > 0 ? chapters : [content];
+      appState.currentChapterIndex = 0;
+      updateChapterNavigation();
+      generateToc();
+    }
+    
+    // 生成PDF目录
+    function generatePdfToc() {
+      if (!appState.pdfDoc) return;
+      
+      let tocHtml = '';
+      for (let i = 1; i <= appState.totalPages; i++) {
+        tocHtml += `
+          <li>
+            <button class="w-full text-left px-2 py-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors ${i === appState.currentPage ? 'text-primary font-medium' : ''}"
+                    data-page="${i}">
+              第${i}页
+            </button>
+          </li>
+        `;
+      }
+      
+      elements.documentToc.innerHTML = tocHtml;
+      
+      document.querySelectorAll('#document-toc button[data-page]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          appState.currentPage = parseInt(btn.dataset.page);
+          renderPdfPage(appState.currentPage);
+          updatePageNavigation();
+          if (window.innerWidth < 1024) {
+            elements.sidebar.classList.add('-translate-x-full');
+          }
+        });
+      });
+    }
+    
+    // 生成TXT目录
+    function generateToc() {
+      if (appState.fileType !== 'txt' || appState.chapters.length === 0) return;
+      
+      let tocHtml = '';
+      appState.chapters.forEach((chapter, index) => {
+        const title = chapter.substring(0, 30).replace(/\n/g, ' ') + (chapter.length > 30 ? '...' : '');
+        tocHtml += `
+          <li>
+            <button class="w-full text-left px-2 py-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors ${index === appState.currentChapterIndex ? 'text-primary font-medium' : ''}"
+                    data-chapter="${index}">
+              第${index + 1}章：${title}
+            </button>
+          </li>
+        `;
+      });
+      
+      elements.documentToc.innerHTML = tocHtml;
+      
+      document.querySelectorAll('#document-toc button[data-chapter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          appState.currentChapterIndex = parseInt(btn.dataset.chapter);
+          renderCurrentChapter();
+          updateChapterNavigation();
+          if (window.innerWidth < 1024) {
+            elements.sidebar.classList.add('-translate-x-full');
+          }
+        });
+      });
+    }
+    
+    // 渲染当前TXT章节
+    function renderCurrentChapter() {
+      if (appState.fileType !== 'txt' || appState.chapters.length === 0) return;
+      
+      const chapterContent = appState.chapters[appState.currentChapterIndex];
+      const htmlContent = chapterContent
+        .split('\n\n')
+        .map(paragraph => `<p class="mb-[var(--paragraph-spacing,16px)]">${paragraph}</p>`)
+        .join('');
+      
+      elements.txtContainer.innerHTML = htmlContent;
+      applyAnnotations();
+      
+      // 如果有保存的滚动位置，恢复它
+      if (appState.currentFile && appState.readingProgress[appState.currentFile.name] && 
+          appState.readingProgress[appState.currentFile.name].scrollPosition) {
+        elements.txtContainer.scrollTop = appState.readingProgress[appState.currentFile.name].scrollPosition;
+      } else {
+        elements.txtContainer.scrollTop = 0;
+      }
+      
+      updateReadingProgress();
+    }
+    
+    // 渲染PDF页面
+    function renderPdfPage(pageNum) {
+      if (appState.fileType !== 'pdf' || !appState.pdfDoc) return;
+      
+      appState.pdfDoc.getPage(pageNum).then(function(page) {
+        const viewport = page.getViewport({ scale: pdfConfig.scale });
+        
+        // 创建画布
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        canvas.className = 'shadow-sm mb-4';
+        
+        // 清空并添加画布
+        elements.pdfViewer.innerHTML = '';
+        elements.pdfViewer.appendChild(canvas);
+        
+        // 渲染页面
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+        
+        const renderTask = page.render(renderContext);
+        renderTask.promise.then(function() {
+          // 创建文本层（支持选择和标注）
+          page.getTextContent().then(function(textContent) {
+            const textLayerDiv = document.createElement('div');
+            textLayerDiv.className = 'textLayer absolute top-4 left-6 right-6';
+            textLayerDiv.style.height = `${viewport.height}px`;
+            textLayerDiv.style.width = `${viewport.width}px`;
+            elements.pdfViewer.appendChild(textLayerDiv);
+            
+            // 渲染文本层
+            const textLayer = new pdfjsLib.TextLayerBuilder({
+              textContent: textContent,
+              container: textLayerDiv,
+              viewport: viewport,
+              textDivs: []
+            });
+            textLayer.render();
+          });
+        });
+        
+        // 更新页码信息
+        elements.pageInfo.textContent = `第${pageNum}页 / 共${appState.totalPages}页`;
+        appState.currentPage = pageNum;
+        updatePageNavigation();
+      }).catch(function(error) {
+        showError(`PDF页面渲染失败: ${error.message}`);
+      });
+    }
+    
+    // 更新导航状态
+    function updateChapterNavigation() {
+      if (appState.fileType !== 'txt') return;
+      
+      elements.prevChapter.disabled = appState.currentChapterIndex === 0;
+      elements.nextChapter.disabled = appState.currentChapterIndex === appState.chapters.length - 1;
+    }
+    
+    function updatePageNavigation() {
+      if (appState.fileType !== 'pdf' || !appState.pdfDoc) return;
+      
+      elements.prevPage.disabled = appState.currentPage === 1;
+      elements.nextPage.disabled = appState.currentPage === appState.totalPages;
+    }
+    
+    // 导航功能
+    function goToPrevChapter() {
+      if (appState.fileType !== 'txt' || appState.currentChapterIndex <= 0) return;
+      
+      appState.currentChapterIndex--;
+      renderCurrentChapter();
+      updateChapterNavigation();
+      updateTocSelection();
+      saveCurrentReadingProgress();
+    }
+    
+    function goToNextChapter() {
+      if (appState.fileType !== 'txt' || appState.currentChapterIndex >= appState.chapters.length - 1) return;
+      
+      appState.currentChapterIndex++;
+      renderCurrentChapter();
+      updateChapterNavigation();
+      updateTocSelection();
+      saveCurrentReadingProgress();
+    }
+    
+    function goToPrevPage() {
+      if (appState.fileType !== 'pdf' || appState.currentPage <= 1 || !appState.pdfDoc) return;
+      
+      appState.currentPage--;
+      renderPdfPage(appState.currentPage);
+      saveCurrentReadingProgress();
+    }
+    
+    function goToNextPage() {
+      if (appState.fileType !== 'pdf' || appState.currentPage >= appState.totalPages || !appState.pdfDoc) return;
+      
+      appState.currentPage++;
+      renderPdfPage(appState.currentPage);
+      saveCurrentReadingProgress();
+    }
+    
+    function updateTocSelection() {
+      if (appState.fileType !== 'txt') return;
+      
+      document.querySelectorAll('#document-toc button').forEach((btn, index) => {
+        if (index === appState.currentChapterIndex) {
+          btn.classList.add('text-primary', 'font-medium');
+        } else {
+          btn.classList.remove('text-primary', 'font-medium');
+        }
+      });
+    }
+    
+    // 更新阅读进度
+    function updateReadingProgress() {
+      if (appState.fileType !== 'txt' || !elements.txtContainer) return;
+      
+      const scrollTop = elements.txtContainer.scrollTop;
+      const scrollHeight = elements.txtContainer.scrollHeight - elements.txtContainer.clientHeight;
+      const progress = scrollHeight > 0 ? Math.round((scrollTop / scrollHeight) * 100) : 0;
+      
+      elements.readingProgress.textContent = `${progress}%`;
+      elements.progressBar.style.width = `${progress}%`;
+      
+      // 实时保存滚动位置
+      if (appState.currentFile) {
+        saveCurrentReadingProgress();
+      }
+    }
+    
+    // 保存当前阅读进度
+    function saveCurrentReadingProgress() {
+      if (!appState.currentFile) return;
+      
+      const fileName = appState.currentFile.name;
+      
+      if (appState.fileType === 'txt') {
+        appState.readingProgress[fileName] = {
+          type: 'txt',
+          chapterIndex: appState.currentChapterIndex,
+          scrollPosition: elements.txtContainer.scrollTop,
+          progress: elements.progressBar.style.width
+        };
+      } else if (appState.fileType === 'pdf') {
+        appState.readingProgress[fileName] = {
+          type: 'pdf',
+          page: appState.currentPage,
+          progress: Math.round((appState.currentPage / appState.totalPages) * 100) + '%'
+        };
+      }
+      
+      // 更新书籍最后访问时间
+      const bookIndex = appState.books.findIndex(b => b.name === fileName);
+      if (bookIndex >= 0) {
+        appState.books[bookIndex].lastAccessed = new Date().toISOString();
+        saveBooks();
+      }
+      
+      saveSettings();
+    }
+    
+    // 恢复阅读进度
+    function restoreReadingProgress(fileName) {
+      if (!appState.readingProgress[fileName]) return;
+      
+      const progress = appState.readingProgress[fileName];
+      
+      if (progress.type === 'txt' && appState.fileType === 'txt') {
+        appState.currentChapterIndex = progress.chapterIndex || 0;
+        elements.progressBar.style.width = progress.progress || '0%';
+        elements.readingProgress.textContent = progress.progress || '0%';
+      } else if (progress.type === 'pdf' && appState.fileType === 'pdf') {
+        appState.currentPage = progress.page || 1;
+        elements.progressBar.style.width = progress.progress || '0%';
+        elements.readingProgress.textContent = progress.progress || '0%';
+      }
+    }
+    
+    // 主题切换
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+      saveSettings();
+    }
+    
+    // 样式设置
+    function updateFontFamily() {
+      if (appState.fileType !== 'txt') return;
+      
+      const fontFamily = elements.fontFamily.value;
+      elements.txtContainer.className = `bg-white dark:bg-neutral-800 p-6 md:p-10 rounded-xl shadow-sm min-h-[500px] font-${fontFamily} text-base overflow-auto`;
+      saveSettings();
+    }
+    
+    function updateFontSize() {
+      if (appState.fileType !== 'txt') return;
+      
+      const fontSize = elements.fontSize.value;
+      elements.fontSizeValue.textContent = `${fontSize}px`;
+      elements.txtContainer.style.fontSize = `${fontSize}px`;
+      saveSettings();
+    }
+    
+    function updateLineHeight() {
+      if (appState.fileType !== 'txt') return;
+      
+      const lineHeight = elements.lineHeight.value;
+      elements.lineHeightValue.textContent = lineHeight;
+      elements.txtContainer.style.lineHeight = lineHeight;
+      saveSettings();
+    }
+    
+    function updateParagraphSpacing() {
+      if (appState.fileType !== 'txt') return;
+      
+      const spacing = elements.paragraphSpacing.value;
+      elements.paragraphSpacingValue.textContent = `${spacing}px`;
+      document.documentElement.style.setProperty('--paragraph-spacing', `${spacing}px`);
+      saveSettings();
+    }
+    
+    function setBackground(color) {
+      if (appState.fileType === 'txt') {
+        elements.txtContainer.className = elements.txtContainer.className
+          .replace(/bg-\w+(-\w+)*/g, '')
+          .replace(/dark:bg-\w+(-\w+)*/g, '');
+          
+        elements.txtContainer.classList.add(`bg-${color}`);
+        elements.txtContainer.classList.add(`dark:bg-${color === 'white' ? 'neutral-800' : color}`);
+      } else if (appState.fileType === 'pdf') {
+        elements.pdfContainer.className = elements.pdfContainer.className
+          .replace(/bg-\w+(-\w+)*/g, '')
+          .replace(/dark:bg-\w+(-\w+)*/g, '');
+          
+        elements.pdfContainer.classList.add(`bg-${color}`);
+        elements.pdfContainer.classList.add(`dark:bg-${color === 'white' ? 'neutral-800' : color}`);
+      }
+      saveSettings();
+    }
+    
+    // 专注模式
+    function toggleFocusMode() {
+      if (elements.focusMode.checked) {
+        document.body.classList.add('focus-mode');
+        elements.sidebar.classList.add('hidden');
+        elements.toolbar.classList.add('hidden');
+        document.querySelector('header').classList.add('hidden');
+        document.querySelector('.lg\\:hidden').classList.add('hidden');
+        
+        if (appState.fileType === 'txt') {
+          elements.txtContainer.classList.add('p-0', 'max-w-none', 'rounded-none');
+        } else {
+          elements.pdfContainer.classList.add('p-0', 'max-w-none', 'rounded-none');
+        }
+      } else {
+        document.body.classList.remove('focus-mode');
+        elements.sidebar.classList.remove('hidden');
+        elements.toolbar.classList.remove('hidden');
+        document.querySelector('header').classList.remove('hidden');
+        document.querySelector('.lg\\:hidden').classList.remove('hidden');
+        
+        if (appState.fileType === 'txt') {
+          elements.txtContainer.classList.remove('p-0', 'max-w-none', 'rounded-none');
+        } else {
+          elements.pdfContainer.classList.remove('p-0', 'max-w-none', 'rounded-none');
+        }
+      }
+      saveSettings();
+    }
+    
+    // 朗读功能
+    function toggleReadAloud() {
+      if (!appState.speechSynthesis) {
+        alert('您的浏览器不支持文本朗读功能');
+        return;
+      }
+      
+      if (appState.isReadingAloud) {
+        appState.speechSynthesis.cancel();
+        elements.readAloud.innerHTML = '<i class="fa fa-volume-up"></i><span>文本朗读</span>';
+      } else {
+        let text = '';
+        if (appState.fileType === 'txt') {
+          text = appState.chapters[appState.currentChapterIndex] || appState.currentContent;
+        } else if (appState.fileType === 'pdf') {
+          text = '正在提取PDF文本...';
+          appState.pdfDoc.getPage(appState.currentPage).then(page => {
+            page.getTextContent().then(content => {
+              text = content.items.map(item => item.str).join(' ');
+              appState.speechUtterance = new SpeechSynthesisUtterance(text);
+              appState.speechUtterance.lang = 'zh-CN';
+              appState.speechSynthesis.speak(appState.speechUtterance);
+            });
+          });
+        }
+        
+        appState.speechUtterance = new SpeechSynthesisUtterance(text);
+        appState.speechUtterance.lang = 'zh-CN';
+        appState.speechSynthesis.speak(appState.speechUtterance);
+        elements.readAloud.innerHTML = '<i class="fa fa-stop"></i><span>停止朗读</span>';
+      }
+      
+      appState.isReadingAloud = !appState.isReadingAloud;
+    }
+    
+    // 标注功能
+    function showAnnotationMenu(e) {
+      if (elements.annotationMenu.contains(e.target)) return;
+      
+      const selection = window.getSelection();
+      if (selection.toString().length > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        elements.annotationMenu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+        elements.annotationMenu.style.left = `${rect.left + window.scrollX - 40}px`;
+        elements.annotationMenu.classList.remove('hidden');
+      } else {
+        elements.annotationMenu.classList.add('hidden');
+      }
+    }
+    
+    function hideAnnotationMenu(e) {
+      if (e && elements.annotationMenu.contains(e.target)) return;
+      elements.annotationMenu.classList.add('hidden');
+    }
+    
+    function addAnnotation(type) {
+      const selection = window.getSelection();
+      const text = selection.toString();
+      
+      if (!text) return;
+      
+      const range = selection.getRangeAt(0);
+      let annotationElement;
+      
+      if (type === 'note') {
+        const noteText = prompt('请输入笔记内容:');
+        if (!noteText) return;
+        
+        annotationElement = document.createElement('span');
+        annotationElement.className = 'relative underline underline-offset-4 decoration-green-500 cursor-help';
+        annotationElement.title = noteText;
+        annotationElement.dataset.annotation = 'note';
+        annotationElement.dataset.note = noteText;
+        
+        appState.annotations.push({
+          type,
+          text,
+          note: noteText,
+          fileType: appState.fileType,
+          fileName: appState.currentFile.name,
+          location: appState.fileType === 'txt' ? appState.currentChapterIndex : appState.currentPage,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        annotationElement = document.createElement('span');
+        annotationElement.className = type;
+        annotationElement.dataset.annotation = type;
+        
+        appState.annotations.push({
+          type,
+          text,
+          fileType: appState.fileType,
+          fileName: appState.currentFile.name,
+          location: appState.fileType === 'txt' ? appState.currentChapterIndex : appState.currentPage,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      try {
+        range.surroundContents(annotationElement);
+        updateAnnotationsList();
+        saveSettings();
+      } catch (e) {
+        console.warn('无法标注跨元素的文本:', e);
+        alert('无法标注跨段落的文本，请选择单个段落内的文本进行标注');
+      }
+    }
+    
+    function applyAnnotations() {
+      if (appState.annotations.length === 0 || !appState.currentFile) return;
+      
+      const fileName = appState.currentFile.name;
+      const relevantAnnotations = appState.annotations.filter(
+        annot => annot.fileName === fileName &&
+                annot.location === (appState.fileType === 'txt' ? appState.currentChapterIndex : appState.currentPage)
+      );
+      
+      relevantAnnotations.forEach(annotation => {
+        const xpath = `//*[contains(text(), '${escapeXpathString(annotation.text.substring(0, 20))}')]`;
+        const contextNode = appState.fileType === 'txt' ? elements.txtContainer : elements.pdfViewer;
+        const result = document.evaluate(xpath, contextNode, null, XPathResult.ANY_TYPE, null);
+        let node = result.iterateNext();
+        
+        if (node && node.textContent.includes(annotation.text)) {
+          let text = node.textContent;
+          const replacement = annotation.type === 'note' 
+            ? `<span class="relative underline underline-offset-4 decoration-green-500 cursor-help" title="${annotation.note}" data-annotation="note" data-note="${annotation.note}">${annotation.text}</span>`
+            : `<span class="${annotation.type}" data-annotation="${annotation.type}">${annotation.text}</span>`;
+          
+          node.innerHTML = text.replace(annotation.text, replacement);
+        }
+      });
+    }
+    
+    function escapeXpathString(str) {
+      return str.replace(/"/g, '\\"').replace(/'/g, "\\'");
+    }
+    
+    function updateAnnotationsList() {
+      if (appState.annotations.length === 0 || !appState.currentFile) {
+        elements.annotationsList.innerHTML = `
+          <div class="text-sm text-neutral-500 dark:text-neutral-400 italic text-center py-4">
+            暂无标注
+          </div>
+        `;
+        return;
+      }
+      
+      const fileName = appState.currentFile.name;
+      const relevantAnnotations = appState.annotations.filter(annot => annot.fileName === fileName);
+      
+      if (relevantAnnotations.length === 0) {
+        elements.annotationsList.innerHTML = `
+          <div class="text-sm text-neutral-500 dark:text-neutral-400 italic text-center py-4">
+            暂无标注
+          </div>
+        `;
+        return;
+      }
+      
+      const sortedAnnotations = [...relevantAnnotations].sort((a, b) => {
+        if (a.location !== b.location) return a.location - b.location;
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      });
+      
+      let annotationsHtml = '';
+      sortedAnnotations.forEach((annotation, index) => {
+        const icon = annotation.type === 'highlight' 
+          ? '<i class="fa fa-marker text-yellow-500 mr-1"></i>'
+          : annotation.type === 'underline'
+            ? '<i class="fa fa-underline text-primary mr-1"></i>'
+            : '<i class="fa fa-sticky-note text-green-500 mr-1"></i>';
+        
+        const location = annotation.fileType === 'txt' 
+          ? `第${annotation.location + 1}章` 
+          : `第${annotation.location}页`;
+        
+        const textPreview = annotation.text.length > 30 
+          ? annotation.text.substring(0, 30) + '...' 
+          : annotation.text;
+        
+        const noteText = annotation.type === 'note' ? ` - ${annotation.note.substring(0, 20)}...` : '';
+        
+        annotationsHtml += `
+          <div class="flex items-start justify-between p-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+            <div class="text-sm">
+              <div class="flex items-center">
+                ${icon}
+                <span class="mr-1">${location}</span>
+              </div>
+              <div class="text-xs text-neutral-600 dark:text-neutral-300 mt-1">
+                ${textPreview}${noteText}
+              </div>
+            </div>
+            <button class="text-neutral-400 hover:text-red-500 transition-colors" data-index="${appState.annotations.findIndex(a => a.timestamp === annotation.timestamp)}">
+              <i class="fa fa-times"></i>
+            </button>
+          </div>
+        `;
+      });
+      
+      elements.annotationsList.innerHTML = annotationsHtml;
+      
+      document.querySelectorAll('#annotations-list button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const index = parseInt(btn.dataset.index);
+          appState.annotations.splice(index, 1);
+          updateAnnotationsList();
+          
+          if (appState.fileType === 'txt') {
+            renderCurrentChapter();
+          } else if (appState.fileType === 'pdf') {
+            renderPdfPage(appState.currentPage);
+          }
+          
+          saveSettings();
+          e.stopPropagation();
+        });
+      });
+    }
+    
+    function clearAllAnnotations() {
+      if (!appState.currentFile) return;
+      
+      if (confirm('确定要清除当前文档的所有标注吗？')) {
+        const fileName = appState.currentFile.name;
+        appState.annotations = appState.annotations.filter(annot => annot.fileName !== fileName);
+        updateAnnotationsList();
+        
+        if (appState.fileType === 'txt') {
+          renderCurrentChapter();
+        } else if (appState.fileType === 'pdf') {
+          renderPdfPage(appState.currentPage);
+        }
+        
+        saveSettings();
+      }
+    }
+    
+    // 搜索功能
+    function handleSearch(e) {
+      const searchTerm = e.target.value.toLowerCase();
+      if (!searchTerm || searchTerm.length < 2) {
+        elements.mobileSearchResults.textContent = '请输入至少2个字符进行搜索';
+        if (appState.fileType === 'txt') {
+          renderCurrentChapter();
+        } else if (appState.fileType === 'pdf') {
+          renderPdfPage(appState.currentPage);
+        }
+        return;
+      }
+      
+      let matches = 0;
+      
+      if (appState.fileType === 'txt') {
+        const currentChapter = appState.chapters[appState.currentChapterIndex] || appState.currentContent;
+        matches = currentChapter.toLowerCase().split(searchTerm).length - 1;
+        
+        let highlightedContent = currentChapter.replace(
+          new RegExp(`(${searchTerm})`, 'gi'),
+          '<span class="bg-yellow-200 dark:bg-yellow-800">$1</span>'
+        );
+        
+        highlightedContent = highlightedContent
+          .split('\n\n')
+          .map(paragraph => `<p class="mb-[var(--paragraph-spacing,16px)]">${paragraph}</p>`)
+          .join('');
+          
+        elements.txtContainer.innerHTML = highlightedContent;
+      } else if (appState.fileType === 'pdf') {
+        // PDF搜索
+        matches = '正在搜索PDF...';
+        elements.mobileSearchResults.textContent = 'PDF搜索中...';
+        
+        // 实际应用中应遍历所有页面搜索
+        appState.pdfDoc.getPage(appState.currentPage).then(page => {
+          page.getTextContent().then(content => {
+            const text = content.items.map(item => item.str).join(' ').toLowerCase();
+            matches = text.split(searchTerm).length - 1;
+            elements.mobileSearchResults.textContent = `找到 ${matches} 个匹配结果`;
+          });
+        });
+      }
+      
+      if (matches > 0) {
+        elements.mobileSearchResults.textContent = `找到 ${matches} 个匹配结果`;
+      } else {
+        elements.mobileSearchResults.textContent = '未找到匹配结果';
+      }
+      
+      applyAnnotations();
+    }
+    
+    // 书架管理
+    function renderBookshelf() {
+      // 按最后访问时间排序（最近的在前）
+      const sortedBooks = [...appState.books].sort((a, b) => 
+        new Date(b.lastAccessed) - new Date(a.lastAccessed)
+      );
+      
+      // 显示最近阅读（最多6本）
+      const recentBooks = sortedBooks.slice(0, 6);
+      
+      if (recentBooks.length === 0) {
+        elements.recentBooksContainer.innerHTML = `
+          <div class="col-span-full text-center py-10 text-neutral-500 dark:text-neutral-400">
+            <i class="fa fa-book-open text-5xl mb-3 opacity-30"></i>
+            <p>暂无阅读记录</p>
+            <p class="text-sm mt-2">点击"添加书籍"开始阅读</p>
+          </div>
+        `;
+      } else {
+        let recentHtml = '';
+        recentBooks.forEach(book => {
+          const progress = appState.readingProgress[book.name] 
+            ? appState.readingProgress[book.name].progress || '0%'
+            : '0%';
+            
+          const progressPercent = progress.replace('%', '');
+          
+          recentHtml += `
+            <div class="book-hover">
+              <div class="book-cover book-shadow cursor-pointer" onclick="openBookFromShelf('${book.id}')">
+                <div class="book-cover-placeholder" style="background-color: ${book.coverColor}">
+                  <i class="fa fa-${book.type === 'pdf' ? 'file-pdf-o' : 'file-text-o'} text-4xl mb-2"></i>
+                  <span class="font-medium text-sm text-center px-2 truncate">${getFileNameWithoutExtension(book.name)}</span>
+                </div>
+                <div class="book-progress">
+                  <div class="book-progress-bar" style="width: ${progressPercent}%"></div>
+                </div>
+              </div>
+              <p class="text-sm mt-2 truncate text-center">${getFileNameWithoutExtension(book.name)}</p>
+              <p class="text-xs text-neutral-500 dark:text-neutral-400 text-center mt-1">
+                ${formatDate(book.lastAccessed)}
+              </p>
+            </div>
+          `;
+        });
+        
+        elements.recentBooksContainer.innerHTML = recentHtml;
+      }
+      
+      // 显示所有书籍
+      if (sortedBooks.length === 0) {
+        elements.allBooksContainer.innerHTML = `
+          <div class="col-span-full text-center py-10 text-neutral-500 dark:text-neutral-400">
+            <i class="fa fa-book text-5xl mb-3 opacity-30"></i>
+            <p>书架还是空的</p>
+            <p class="text-sm mt-2">点击"添加书籍"充实您的书架</p>
+          </div>
+        `;
+      } else {
+        let allBooksHtml = '';
+        sortedBooks.forEach(book => {
+          const progress = appState.readingProgress[book.name] 
+            ? appState.readingProgress[book.name].progress || '0%'
+            : '0%';
+            
+          const progressPercent = progress.replace('%', '');
+          
+          allBooksHtml += `
+            <div class="book-hover">
+              <div class="book-cover book-shadow cursor-pointer" onclick="openBookFromShelf('${book.id}')">
+                <div class="book-cover-placeholder" style="background-color: ${book.coverColor}">
+                  <i class="fa fa-${book.type === 'pdf' ? 'file-pdf-o' : 'file-text-o'} text-4xl mb-2"></i>
+                  <span class="font-medium text-sm text-center px-2 truncate">${getFileNameWithoutExtension(book.name)}</span>
+                </div>
+                <div class="book-progress">
+                  <div class="book-progress-bar" style="width: ${progressPercent}%"></div>
+                </div>
+              </div>
+              <p class="text-sm mt-2 truncate text-center">${getFileNameWithoutExtension(book.name)}</p>
+              <p class="text-xs text-neutral-500 dark:text-neutral-400 text-center mt-1">
+                ${formatDate(book.added)}
+              </p>
+            </div>
+          `;
+        });
+        
+        elements.allBooksContainer.innerHTML = allBooksHtml;
+      }
+    }
+    
+    // 加载书籍列表
+    function loadBooks() {
+      const savedBooks = localStorage.getItem('libraryBooks');
+      if (savedBooks) {
+        appState.books = JSON.parse(savedBooks);
+      }
+      renderBookshelf();
+    }
+    
+    // 保存书籍列表
+    function saveBooks() {
+      localStorage.setItem('libraryBooks', JSON.stringify(appState.books));
+    }
+    
+    // 更新最近文件
+    function updateRecentFiles(file) {
+      // 已在openBook和handleFileUpload中处理
+    }
+    
+    // 工具函数
+    function formatDate(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+      
+      if (diffInDays === 0) {
+        return '今天';
+      } else if (diffInDays === 1) {
+        return '昨天';
+      } else if (diffInDays < 7) {
+        return `${diffInDays}天前`;
+      } else {
+        return date.toLocaleDateString();
+      }
+    }
+    
+    function getFileNameWithoutExtension(filename) {
+      return filename.substring(0, filename.lastIndexOf('.')) || filename;
+    }
+    
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    }
+    
+    function getRandomCoverColor() {
+      const colors = [
+        '#FFCDD2', '#F8BBD0', '#C8E6C9', '#B3E5FC', '#C5CAE9',
+        '#E1BEE7', '#FFE0B2', '#FFCCBC', '#D7CCC8', '#F5F5F5'
+      ];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+    
+    // 设置保存与加载
+    function saveSettings() {
+      const settings = {
+        darkMode: document.documentElement.classList.contains('dark'),
+        fontFamily: elements.fontFamily.value,
+        fontSize: elements.fontSize.value,
+        lineHeight: elements.lineHeight.value,
+        paragraphSpacing: elements.paragraphSpacing.value,
+        focusMode: elements.focusMode.checked,
+        annotations: appState.annotations,
+        readingProgress: appState.readingProgress,
+        lastEncoding: elements.txtEncoding.value
+      };
+      
+      localStorage.setItem('readerSettings', JSON.stringify(settings));
+    }
+    
+    function loadSettings() {
+      const settings = JSON.parse(localStorage.getItem('readerSettings') || '{}');
+      
+      if (settings.darkMode) {
+        document.documentElement.classList.add('dark');
+      }
+      
+      if (settings.fontFamily) {
+        elements.fontFamily.value = settings.fontFamily;
+        updateFontFamily();
+      }
+      
+      if (settings.fontSize) {
+        elements.fontSize.value = settings.fontSize;
+        updateFontSize();
+      }
+      
+      if (settings.lineHeight) {
+        elements.lineHeight.value = settings.lineHeight;
+        updateLineHeight();
+      }
+      
+      if (settings.paragraphSpacing) {
+        elements.paragraphSpacing.value = settings.paragraphSpacing;
+        updateParagraphSpacing();
+      }
+      
+      if (settings.focusMode) {
+        elements.focusMode.checked = settings.focusMode;
+        toggleFocusMode();
+      }
+      
+      if (settings.annotations && Array.isArray(settings.annotations)) {
+        appState.annotations = settings.annotations;
+        updateAnnotationsList();
+      }
+      
+      if (settings.readingProgress) {
+        appState.readingProgress = settings.readingProgress;
+      }
+      
+      if (settings.lastEncoding) {
+        elements.txtEncoding.value = settings.lastEncoding;
+      }
+    }
+    
+    // 暴露给全局的函数（用于书架点击）
+    window.openBookFromShelf = openBookFromShelf;
+    
+    // 初始化应用
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
